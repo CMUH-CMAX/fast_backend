@@ -2,7 +2,7 @@ from typing import Union, Optional
 
 from fastapi import FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
-
+from fake_db_init import init_all
 import uuid
 
 app = FastAPI()
@@ -30,7 +30,7 @@ guest = db.create('users', {
     'permission': 0, 
     'auth_method': 'no_password',
 })
-print(guest)
+init_all(db)
 CACHE = {'guest': guest}
 
 
@@ -75,3 +75,9 @@ def create_user(username: str, password: str):
         'auth_method': 'password',
     })
     return user
+
+@app.get("/api/symptoms")
+def get_symptoms():
+    symptoms_list = db.read("symptoms")
+    sorted_symptoms_list = sorted(symptoms_list, key=lambda x: x['visit'], reverse=True)
+    return sorted_symptoms_list

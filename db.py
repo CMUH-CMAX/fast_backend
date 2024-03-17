@@ -6,6 +6,12 @@ DB_PROPERTY = {
         'password': {'dtype': 'str'},
         'permission': {'dtype': 'int'},
         'auth_method': {'dtype': 'str'},
+    },
+    'symptoms': {
+        'symptoms_id': {'dtype': 'int', 'auto_increment': True},
+        'name': {'dtype': 'str'},
+        'academic': {'dtype': 'str'},
+        'visit': {'dtype': 'int'},
     }
 }
 
@@ -28,9 +34,12 @@ class Database:
         self.data[table].append(new_record)
         return copy.deepcopy(new_record)
 
-    def read(self, table, criteria):
+    def read(self, table, criteria=None):
         if table not in self.db_properties:
             raise ValueError(f"Table '{table}' does not exist.")
+        if criteria == None:
+            return copy.deepcopy( self.data[table] )
+        
         records = []
         for record in self.data[table]:
             if all(record.get(field) == value for field, value in criteria.items()):
