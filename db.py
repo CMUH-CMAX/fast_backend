@@ -1,3 +1,4 @@
+import copy
 DB_PROPERTY = {
     'users': {
         'user_id': {'dtype':'int', 'auto_increment':True},
@@ -25,7 +26,7 @@ class Database:
             else:
                 new_record[field] = data.get(field)
         self.data[table].append(new_record)
-        return new_record
+        return copy.deepcopy(new_record)
 
     def read(self, table, criteria):
         if table not in self.db_properties:
@@ -34,7 +35,7 @@ class Database:
         for record in self.data[table]:
             if all(record.get(field) == value for field, value in criteria.items()):
                 records.append(record)
-        return records
+        return copy.deepcopy(records)
 
     def update(self, table, criteria, new_data):
         if table not in self.db_properties:
