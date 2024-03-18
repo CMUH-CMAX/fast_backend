@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fake_db_init import init_all
 import uuid
 
+from datetime import datetime
+
 app = FastAPI()
 
 origins = [
@@ -52,8 +54,9 @@ def create_user_session(username: str, password: str):
         UUID4 = str(uuid.uuid4())
         user = users[0]
         USER = {
+            "user_id": user["user_id"],
             "username": user["username"], 
-            "permission": user["permission"] 
+            "permission": user["permission"],
         }
         CACHE[UUID4] = USER
         return {
@@ -81,3 +84,29 @@ def get_symptoms():
     symptoms_list = db.read("symptoms")
     sorted_symptoms_list = sorted(symptoms_list, key=lambda x: x['visit'], reverse=True)
     return sorted_symptoms_list
+
+
+@app.get("/api/bulletin/{user_id}")
+def read_personal_bulletin(user_id: int):
+    bulletins = db.read("bulletins", {
+        "user_id": user_id
+    })
+    return bulletins
+
+@app.post("/api/bulletin/{user_id}")
+def create_personal_bulletin(user_id: int, title: str, content: str, clesses: str):
+    now = datetime.now()
+    current_datetime = now.strftime("%Y/%m/%d %H:%M:%S")
+    data = {
+        'class': clesses,
+        'user_id': user_id,
+        'title': title,
+        'content': content,
+        'update_at': current_datetime,
+        'create_at': current_datetime,
+    }
+    db.create("bulletins", data)
+    return {
+        "message": "failed successfully",
+        "data": data,
+    }

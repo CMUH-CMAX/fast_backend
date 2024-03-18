@@ -12,6 +12,15 @@ DB_PROPERTY = {
         'name': {'dtype': 'str'},
         'academic': {'dtype': 'str'},
         'visit': {'dtype': 'int'},
+    },
+    'bulletins': {
+        'bulletin_id': {'dtype': 'int', 'auto_increment': True},
+        'class': {'dtype': 'str'},
+        'user_id': {'dtype': 'int'},
+        'title': {'dtype': 'str'},
+        'content': {'dtype': 'str'},
+        'update_at': {'dtype': 'str'},
+        'create_at': {'dtype': 'str'},
     }
 }
 

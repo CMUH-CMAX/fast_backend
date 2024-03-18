@@ -1,16 +1,3 @@
-OLD_SYMPTOMS = [
-    {'name': '紅疹', 'visit': 1324},
-    {'name': '發燒', 'visit': 3579},
-    {'name': '下腹疼痛', 'visit': 1323},
-    {'name': '頭暈', 'visit': 1296},
-    {'name': '畏寒', 'visit': 1268},
-    {'name': '腹瀉', 'visit': 1273},
-    {'name': '皮膚過敏', 'visit': 1231},
-    {'name': '流鼻水', 'visit': 1222},
-    {'name': '打噴嚏', 'visit': 1123},
-    {'name': '牙齦紅腫', 'visit': 991},
-    {'name': '口臭', 'visit': 688},
-]
 
 SYMPTOMS = [
     {
@@ -74,7 +61,16 @@ SYMPTOMS = [
       "visit": 324
     },
 ]
-
+BIG_DICK_MAN_NEWS = [{
+  "class": "warning",
+  "user_id": 1,
+  "title": "驚爆！！！大屌男出沒中央大學！",
+  "content": "城市驚現超級大屌男，引起市民熱議和媒體關注，成為社交媒體熱門話題。",
+  "update_at": "2024/03/18 22:47:14",
+  "create_at": "2024/03/18 22:47:14"
+}]
 def init_all(db):
     for s in SYMPTOMS:
         db.create('symptoms', s)
+    for every_big_dick_man in BIG_DICK_MAN_NEWS:
+        db.create("bulletins", every_big_dick_man)
