@@ -4,9 +4,9 @@ import pypika
 
 
 class DatabaseNative:
-    def __init__(self, db_path, password):
+    def __init__(self, db_path, password=None):
         self.conn = sqlite3.connect(db_path)
-        if password:
+        if password is not None:
             raise NotImplementedError
 
     def execute(self, script):
@@ -19,42 +19,6 @@ class DatabaseNative:
     def vacuum(self):
         cursor = self.conn.cursor()
         cursor.execute("VACUUM")
-
-    # def create(self, table, data):
-    #     cursor = self.conn.cursor()
-    #     cursor.execute(
-    #         f"INSERT INTO ? ()",
-    #     )  # will fail not exist
-    #     return
-
-    # def read(self, table, criteria):
-    #     if table not in self.db_properties:
-    #         raise ValueError(f"Table '{table}' does not exist.")
-
-    #     cursor.execute(
-    #         f"SELECT ? ()",
-    #     )  # will fail not exist
-    #     return records
-
-    # def update(self, table, criteria, new_data):
-    #     if table not in self.db_properties:
-    #         raise ValueError(f"Table '{table}' does not exist.")
-
-    #     updated_count = 0
-    #     cursor.execute(
-    #         f"UPDATE ? ()",
-    #     )  # will fail not exist
-    #     return updated_count
-
-    # def delete(self, table, criteria):
-    #     if table not in self.db_properties:
-    #         raise ValueError(f"Table '{table}' does not exist.")
-
-    #     to_delete = []
-    #     cursor.execute(
-    #         f"DELETE FROM ? WHERE user_id = ?",
-    #     )  # will fail not exist
-    #     return len(to_delete)
 
     def __del__(self):
         self.conn.close()
@@ -70,8 +34,13 @@ class BaseTableDatabase:
         self.db = db
         self.table_name = table_name
 
-    def fields(self):
-        return pypika.Table(self.table_name)
+    def criterion_selector(self) -> tuple[pypika.Table, pypika.terms.Criterion]:
+        """
+        Get default criterion selector.
+        Return: field selector (table), empty criterion (*)
+        See: UserDatabase.query
+        """
+        return pypika.Table(self.table_name), pypika.terms.EmptyCriterion()
 
 
 class UserDatabase(BaseTableDatabase):
@@ -93,29 +62,38 @@ CREATE TABLE `users` (
 """
         )
 
-    def create(self, user_id: str, permisision: str, auth_method: str):
-        # TODO: consider inserting with PyPika
-        # .into().columns.insert()
-        self.db.execute(
-            f"""
-INSERT INTO `users` (`user_id`, `permissions`, `auth_method`)
-VALUES ({user_id}, {permisision}, {auth_method});
-"""
+    def create_user(self, permisision: str, auth_method: str):
+        query = (
+            pypika.Query.into("users")
+            .columns("permissions", "auth_method")
+            .insert(permisision, auth_method)
         )
 
-    # def query(
-    #     self,
-    #     user_id: str | None,
-    #     permisision: str | None,
-    #     auth_method: str | None,
-    #     fields: tuple[str, ...] = ("user_id", "permissions", "auth_method"),
-    # ):
-    #     return self.query_cond(
-    #         user_id and f"= {user_id}",
-    #         permisision and f"= {permisision}",
-    #         auth_method and f"= {auth_method}",
-    #         fields,
-    #     )  # pass None or "= <value>"
+        self.db.execute(str(query))
+
+        res = self.db.execute("select last_insert_rowid();")
+        user_id = res.fetchone()
+        return user_id
+
+    def query_value(
+        self,
+        user_id: str | None,
+        permisision: str | None,
+        auth_method: str | None,
+        fields: tuple[str, ...] = ("user_id", "permissions", "auth_method"),
+    ):
+        field, criterion = self.criterion_selector()
+
+        if user_id is not None:
+            criterion = criterion & (field.user_id == user_id)
+
+        if permisision is not None:
+            criterion = criterion & (field.permisision == permisision)
+
+        if auth_method is not None:
+            criterion = criterion & (field.auth_method == auth_method)
+
+        return self.query(criterion, fields)
 
     def query(
         self,
