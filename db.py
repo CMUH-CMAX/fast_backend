@@ -2,6 +2,11 @@ import sqlite3
 
 import pypika
 
+import logging
+
+
+logger = logging.getLogger(__name__)
+
 
 class DatabaseNative:
     def __init__(self, db_path, password=None):
@@ -11,7 +16,9 @@ class DatabaseNative:
 
     def execute(self, script):
         cursor = self.conn.cursor()
-        res = cursor.executescript(script)
+        res = cursor.execute(script).fetchall()  # TODO: optimize fetch
+
+        logger.debug(script)
 
         self.conn.commit()
         return res
@@ -54,32 +61,32 @@ class UserDatabase(BaseTableDatabase):
         # TODO: consider creating with PyPika
         self.db.execute(
             """
-CREATE TABLE `users` (
+CREATE TABLE IF NOT EXISTS `users` (
   `user_id` INTEGER PRIMARY KEY AUTOINCREMENT,
   `permissions` VARCHAR(256),
   `auth_method` VARCHAR(16)
-);
+)
 """
         )
 
-    def create_user(self, permisision: str, auth_method: str):
+    def create_user(self, permissions: str, auth_method: str):
         query = (
             pypika.Query.into("users")
             .columns("permissions", "auth_method")
-            .insert(permisision, auth_method)
+            .insert(permissions, auth_method)
         )
 
         self.db.execute(str(query))
 
         res = self.db.execute("select last_insert_rowid();")
-        user_id = res.fetchone()
-        return user_id
+        auto_rows = res[0]
+        return auto_rows[0]  # user_id
 
     def query_value(
         self,
-        user_id: str | None,
-        permisision: str | None,
-        auth_method: str | None,
+        user_id: str | None = None,
+        permissions: str | None = None,
+        auth_method: str | None = None,
         fields: tuple[str, ...] = ("user_id", "permissions", "auth_method"),
     ):
         field, criterion = self.criterion_selector()
@@ -87,8 +94,8 @@ CREATE TABLE `users` (
         if user_id is not None:
             criterion = criterion & (field.user_id == user_id)
 
-        if permisision is not None:
-            criterion = criterion & (field.permisision == permisision)
+        if permissions is not None:
+            criterion = criterion & (field.permissions == permissions)
 
         if auth_method is not None:
             criterion = criterion & (field.auth_method == auth_method)
@@ -102,11 +109,11 @@ CREATE TABLE `users` (
     ):
         query = pypika.Query.from_(self.table_name).select(*fields).where(criterion)
         res = self.db.execute(str(query))
-        return res.fetchall()
+        return res
 
     def update(self, criterion: pypika.terms.Criterion, data: dict[str, str]):
         for key in data:
-            if data not in ("permissions", "auth_method"):
+            if key not in ("permissions", "auth_method"):
                 raise ValueError(f"Update failed: invalid data key `{key}`")
 
         query = pypika.Query.update(self.table_name).where(criterion)
