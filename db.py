@@ -1,60 +1,138 @@
-DB_PROPERTY = {
-    'users': {
-        'user_id': {'dtype':'int', 'auto_increment':True},
-        'username': {'dtype': 'str'},
-        'password': {'dtype': 'str'},
-        'permission': {'dtype': 'int'},
-        'auth_method': {'dtype': 'str'},
-    }
-}
+import sqlite3
 
-class Database:
-    def __init__(self, db_properties):
-        self.db_properties = db_properties
-        self.data = {table: [] for table in db_properties}
-        self.auto_increment_values = {table: {field: 0 for field, props in fields.items() if props.get('auto_increment', False)} for table, fields in db_properties.items()}
 
-    def create(self, table, data):
-        if table not in self.db_properties:
-            raise ValueError(f"Table '{table}' does not exist.")
-        new_record = {}
-        for field, properties in self.db_properties[table].items():
-            if properties.get('auto_increment', False):
-                self.auto_increment_values[table][field] += 1
-                new_record[field] = self.auto_increment_values[table][field]
-            else:
-                new_record[field] = data.get(field)
-        self.data[table].append(new_record)
-        return new_record
+class DatabaseNative:
+    def __init__(self, db_path, password):
+        self.conn = sqlite3.connect(db_path)
+        if password:
+            raise NotImplementedError
 
-    def read(self, table, criteria):
-        if table not in self.db_properties:
-            raise ValueError(f"Table '{table}' does not exist.")
-        records = []
-        for record in self.data[table]:
-            if all(record.get(field) == value for field, value in criteria.items()):
-                records.append(record)
-        return records
+    def execute(self, script):
+        cursor = self.conn.cursor()
+        res = cursor.executescript(script)
 
-    def update(self, table, criteria, new_data):
-        if table not in self.db_properties:
-            raise ValueError(f"Table '{table}' does not exist.")
-        updated_count = 0
-        for record in self.data[table]:
-            if all(record.get(field) == value for field, value in criteria.items()):
-                for key, value in new_data.items():
-                    if key in self.db_properties[table]:
-                        record[key] = value
-                updated_count += 1
-        return updated_count
+        self.conn.commit()
+        return res
 
-    def delete(self, table, criteria):
-        if table not in self.db_properties:
-            raise ValueError(f"Table '{table}' does not exist.")
-        to_delete = []
-        for i, record in enumerate(self.data[table]):
-            if all(record.get(field) == value for field, value in criteria.items()):
-                to_delete.append(i)
-        for i in reversed(to_delete):  # Delete in reverse order to avoid index issues
-            del self.data[table][i]
-        return len(to_delete)
+    def vacuum(self):
+        cursor = self.conn.cursor()
+        cursor.execute("VACUUM")
+
+    # def create(self, table, data):
+    #     cursor = self.conn.cursor()
+    #     cursor.execute(
+    #         f"INSERT INTO ? ()",
+    #     )  # will fail not exist
+    #     return
+
+    # def read(self, table, criteria):
+    #     if table not in self.db_properties:
+    #         raise ValueError(f"Table '{table}' does not exist.")
+
+    #     cursor.execute(
+    #         f"SELECT ? ()",
+    #     )  # will fail not exist
+    #     return records
+
+    # def update(self, table, criteria, new_data):
+    #     if table not in self.db_properties:
+    #         raise ValueError(f"Table '{table}' does not exist.")
+
+    #     updated_count = 0
+    #     cursor.execute(
+    #         f"UPDATE ? ()",
+    #     )  # will fail not exist
+    #     return updated_count
+
+    # def delete(self, table, criteria):
+    #     if table not in self.db_properties:
+    #         raise ValueError(f"Table '{table}' does not exist.")
+
+    #     to_delete = []
+    #     cursor.execute(
+    #         f"DELETE FROM ? WHERE user_id = ?",
+    #     )  # will fail not exist
+    #     return len(to_delete)
+
+    def __del__(self):
+        self.conn.close()
+
+
+class BaseTableDatabase:
+    """
+    The database base type, representing a database table.
+    Perform data operation through DatabaseNative.
+    """
+
+    def __init__(self, db: DatabaseNative) -> None:
+        self.db = db
+
+
+class UserDatabase(BaseTableDatabase):
+    """
+    The database (table) for user identity.
+    """
+
+    def __init__(self, db: DatabaseNative) -> None:
+        super().__init__(db)
+
+        self.db.execute(
+            """
+CREATE TABLE `users` (
+  `user_id` INT PRIMARY KEY AUTO_INCREMENT,
+  `permissions` var,
+  `auth_method` var
+);
+"""
+        )
+
+    def create(self, user_id: str, permisision: str, auth_method: str):
+        self.db.execute(
+            f"""
+INSERT INTO `users` (`user_id`, `permissions`, `auth_method`)
+VALUES ({user_id}, {permisision}, {auth_method});
+"""
+        )
+
+    def query(
+        self,
+        user_id: str | None,
+        permisision: str | None,
+        auth_method: str | None,
+        fields: tuple[str, ...] = ("user_id", "permissions", "auth_method"),
+    ):
+        return self.query_cond(
+            user_id and f"= {user_id}",
+            permisision and f"= {permisision}",
+            auth_method and f"= {auth_method}",
+            fields,
+        )  # pass None or "= <value>"
+
+    def query_cond(
+        self,
+        user_id: str | None,
+        permisision: str | None,
+        auth_method: str | None,
+        fields: tuple[str, ...] = ("user_id", "permissions", "auth_method"),
+    ):
+        field_qry = ",".join(f"`{field}`" for field in fields)
+
+        filter_qry = ""
+        where_qry = filter_qry and f"WHERE {filter_qry}"  # "" or "WHERE <filter>"
+
+        res = self.db.execute(
+            f"""
+SELECT {field_qry} FROM `users`
+
+;
+"""
+        )
+        return res.fetchall()
+
+    def update(self, user_id, data):
+        for key in data:
+            if data not in ("permissions", "auth_method"):
+                raise ValueError(f"Update failed: invalid data key `{key}`")
+
+    def delete(self, user_id):
+        pass
