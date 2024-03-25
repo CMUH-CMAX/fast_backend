@@ -68,7 +68,7 @@ def create_user_session(username: str, password: str):
         }
 
 @app.get("/api/user/{user_id}")
-def get_single_user(user_id: int):
+def get_single_user(user_id: int = Path(..., enum=real_time_user_info)):
     user_records = db.read('users', {'user_id': user_id})
     return user_records
 
@@ -93,7 +93,7 @@ def get_symptoms():
 
 
 @app.get("/api/bulletin/{user_id}")
-def read_personal_bulletin(user_id: int):
+def read_personal_bulletin(user_id: int = Path(..., enum=real_time_user_info)):
     bulletins = db.read("bulletins", {
         "user_id": user_id
     })
