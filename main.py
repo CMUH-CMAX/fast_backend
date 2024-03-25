@@ -1,6 +1,6 @@
 from typing import Union, Optional
 
-from fastapi import FastAPI, Header
+from fastapi import FastAPI, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fake_db_init import init_all
 import uuid
@@ -93,8 +93,10 @@ def read_personal_bulletin(user_id: int):
     })
     return bulletins
 
+bulletin_classes = ["info", "warning"]
+
 @app.post("/api/bulletin/{user_id}")
-def create_personal_bulletin(user_id: int, title: str, content: str, clesses: str):
+def create_personal_bulletin(user_id: int, title: str, content: str, clesses: str = Query(..., enum=bulletin_classes)):
     now = datetime.now()
     current_datetime = now.strftime("%Y/%m/%d %H:%M:%S")
     data = {
