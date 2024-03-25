@@ -21,6 +21,13 @@ DB_PROPERTY = {
         'content': {'dtype': 'str'},
         'update_at': {'dtype': 'str'},
         'create_at': {'dtype': 'str'},
+    },
+    'clinics': {
+        'clinic_id': {'dtype': 'int', 'auto_increment': True},
+        'name': {'dtype': 'str'},
+        'address': {'dtype': 'str'},
+        'contact': {'dtype': 'str'},
+        'owner_id': {'dtype': 'int'},
     }
 }
 

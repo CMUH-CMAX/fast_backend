@@ -1,3 +1,6 @@
+import json
+#CLINICS = json.load(open("data/clinics.json", "r"))
+CLINICS = [json.loads(line) for line in open("data/clinics.jsonl", "r")]
 
 SYMPTOMS = [
     {
@@ -74,3 +77,18 @@ def init_all(db):
         db.create('symptoms', s)
     for every_big_dick_man in BIG_DICK_MAN_NEWS:
         db.create("bulletins", every_big_dick_man)
+    
+    doctor = db.create("users", {
+        "username": "real_doctor",
+        "password": "safe_password",
+        "permission": 1,
+        "auth_method": "password" # Facebook, Google, ..., etc.
+    })
+
+    for clinic in CLINICS: # need a owner
+        db.create("clinics", {
+            'name': clinic['name'],
+            'address': clinic['address'],
+            'contact': clinic['number'],
+            'owner_id': doctor['user_id'],
+        })

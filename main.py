@@ -110,3 +110,7 @@ def create_personal_bulletin(user_id: int, title: str, content: str, clesses: st
         "message": "failed successfully",
         "data": data,
     }
+
+@app.get("/api/clinics")
+def read_clinics():
+    return db.read("clinics")
