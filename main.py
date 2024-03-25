@@ -1,6 +1,6 @@
 from typing import Union, Optional
 
-from fastapi import FastAPI, Header, Query
+from fastapi import FastAPI, Header, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fake_db_init import init_all
 import uuid
@@ -22,6 +22,7 @@ app.add_middleware(
 )
 
 
+
 # Fake database
 from db import DB_PROPERTY, Database
 
@@ -35,6 +36,8 @@ guest = db.create('users', {
 init_all(db)
 CACHE = {'guest': guest}
 
+
+real_time_user_info = [int(v['user_id']) for v in db.read("users")]
 
 @app.get("/api/user/profile")
 def read_root(Authorization: Optional[str] = Header(None, convert_underscores=False)):
@@ -71,12 +74,15 @@ def get_single_user(user_id: int):
 
 @app.post('/api/user')
 def create_user(username: str, password: str):
+    global real_time_user_info
     user = db.create('users', {
         'username': username, 
         'password': password, 
         'permission': 0, 
         'auth_method': 'password',
     })
+    # update real time user info
+    real_time_user_info = [v for v in db.read("users")]
     return user
 
 @app.get("/api/symptoms")
@@ -96,11 +102,11 @@ def read_personal_bulletin(user_id: int):
 bulletin_classes = ["info", "warning"]
 
 @app.post("/api/bulletin/{user_id}")
-def create_personal_bulletin(user_id: int, title: str, content: str, clesses: str = Query(..., enum=bulletin_classes)):
+def create_personal_bulletin(user_id: int = Path(..., enum=real_time_user_info), title: str = "", content: str = "", classes: str = Query(..., enum=bulletin_classes)):
     now = datetime.now()
     current_datetime = now.strftime("%Y/%m/%d %H:%M:%S")
     data = {
-        'class': clesses,
+        'class': classes,
         'user_id': user_id,
         'title': title,
         'content': content,
