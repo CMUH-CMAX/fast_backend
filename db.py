@@ -1,9 +1,8 @@
+from collections.abc import Sequence
+import logging
 import sqlite3
 
 import pypika
-
-from collections.abc import Sequence
-import logging
 
 
 logger = logging.getLogger(__name__)
@@ -65,7 +64,7 @@ class UserDatabase(BaseTableDatabase):
             """
 CREATE TABLE IF NOT EXISTS `users` (
   `user_id` INTEGER PRIMARY KEY AUTOINCREMENT,
-  `permissions` VARCHAR(256),
+  `permissions` INTEGER,
   `auth_method` VARCHAR(16)
 )
 """
@@ -86,11 +85,13 @@ CREATE TABLE IF NOT EXISTS `users` (
         for entry in entries:
             query = query.insert(entry["permissions"], entry["auth_method"])
 
-        self.db.execute(str(query))
+        # PyPika does not support SQLite 'RETURNING'
+        # query = query.returning("user_id") # TODO
+        query_str = str(query) + "RETURNING(`user_id`)"
 
-        res = self.db.execute("select last_insert_rowid();")
-        auto_rows = res[0]
-        return auto_rows
+        # return: auto & default fields
+        res = self.db.execute(query_str)
+        return res
 
     def query_value(
         self,
