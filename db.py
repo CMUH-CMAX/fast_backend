@@ -2,6 +2,7 @@ import sqlite3
 
 import pypika
 
+from collections.abc import Sequence
 import logging
 
 
@@ -50,6 +51,7 @@ class BaseTableDatabase:
         return pypika.Table(self.table_name), pypika.terms.EmptyCriterion()
 
 
+# TODO: operation field check
 class UserDatabase(BaseTableDatabase):
     """
     The database (table) for user identity.
@@ -69,38 +71,37 @@ CREATE TABLE IF NOT EXISTS `users` (
 """
         )
 
-    def create_user(self, permissions: str, auth_method: str):
-        query = (
-            pypika.Query.into("users")
-            .columns("permissions", "auth_method")
-            .insert(permissions, auth_method)
-        )
+    def create(self, entry):
+        if isinstance(entry, Sequence):
+            return self.create_bulk(entry)
+        else:
+            res = self.create_bulk((entry,))
+
+            # single entry, return single result
+            return res[0]
+
+    def create_bulk(self, entries):
+        query = pypika.Query.into("users").columns("permissions", "auth_method")
+
+        for entry in entries:
+            query = query.insert(entry["permissions"], entry["auth_method"])
 
         self.db.execute(str(query))
 
         res = self.db.execute("select last_insert_rowid();")
         auto_rows = res[0]
-        return auto_rows[0]  # user_id
+        return auto_rows
 
     def query_value(
         self,
-        user_id: str | None = None,
-        permissions: str | None = None,
-        auth_method: str | None = None,
-        fields: tuple[str, ...] = ("user_id", "permissions", "auth_method"),
+        entry,
+        select_fields: tuple[str, ...] = ("user_id", "permissions", "auth_method"),
     ):
-        field, criterion = self.criterion_selector()
+        table, criterion = self.criterion_selector()
+        for fd, fval in entry.items():
+            criterion = criterion & (getattr(table, fd) == fval)
 
-        if user_id is not None:
-            criterion = criterion & (field.user_id == user_id)
-
-        if permissions is not None:
-            criterion = criterion & (field.permissions == permissions)
-
-        if auth_method is not None:
-            criterion = criterion & (field.auth_method == auth_method)
-
-        return self.query(criterion, fields)
+        return self.query(criterion, select_fields)
 
     def query(
         self,
@@ -111,14 +112,16 @@ CREATE TABLE IF NOT EXISTS `users` (
         res = self.db.execute(str(query))
         return res
 
-    def update(self, criterion: pypika.terms.Criterion, data: dict[str, str]):
-        for key in data:
-            if key not in ("permissions", "auth_method"):
-                raise ValueError(f"Update failed: invalid data key `{key}`")
+    def read(self, *args, **kwargs):
+        """
+        Alias of `query`.
+        """
+        return self.query(*args, **kwargs)
 
+    def update(self, criterion: pypika.terms.Criterion, entry: dict[str, str]):
         query = pypika.Query.update(self.table_name).where(criterion)
-        for skey, sval in data.items():
-            query = query.set(skey, sval)
+        for fd, fval in entry.items():
+            query = query.set(fd, fval)
 
         self.db.execute(str(query))
 
