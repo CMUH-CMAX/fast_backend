@@ -38,6 +38,7 @@ CACHE = {'guest': guest}
 
 
 real_time_user_info = [int(v['user_id']) for v in db.read("users")]
+bulletin_classes = ["info", "warning"]
 
 @app.get("/api/user/profile")
 def read_root(Authorization: Optional[str] = Header(None, convert_underscores=False)):
@@ -98,8 +99,6 @@ def read_personal_bulletin(user_id: int = Path(..., enum=real_time_user_info)):
         "user_id": user_id
     })
     return bulletins
-
-bulletin_classes = ["info", "warning"]
 
 @app.post("/api/bulletin/{user_id}")
 def create_personal_bulletin(user_id: int = Path(..., enum=real_time_user_info), title: str = "", content: str = "", classes: str = Query(..., enum=bulletin_classes)):
