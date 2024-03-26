@@ -15,10 +15,10 @@ class DatabaseNative:
             raise NotImplementedError
 
     def execute(self, script):
+        logger.error(script)
+
         cursor = self.conn.cursor()
         res = cursor.execute(script).fetchall()  # TODO: optimize fetch
-
-        logger.debug(script)
 
         self.conn.commit()
         return res
@@ -51,6 +51,8 @@ class BaseTableDatabase:
 
 
 # TODO: operation field check
+# TODO: version 1.0 schema
+# TODO: use TEXT (SQLite does not impose any length restrictions)
 class UserDatabase(BaseTableDatabase):
     """
     The database (table) for user identity.
@@ -108,6 +110,87 @@ CREATE TABLE IF NOT EXISTS `users` (
         self,
         criterion: pypika.terms.Criterion,
         fields: tuple[str, ...] = ("user_id", "permissions", "auth_method"),
+    ):
+        query = pypika.Query.from_(self.table_name).select(*fields).where(criterion)
+        res = self.db.execute(str(query))
+        return res
+
+    def read(self, *args, **kwargs):
+        """
+        Alias of `query`.
+        """
+        return self.query(*args, **kwargs)
+
+    def update(self, criterion: pypika.terms.Criterion, entry: dict[str, str]):
+        query = pypika.Query.update(self.table_name).where(criterion)
+        for fd, fval in entry.items():
+            query = query.set(fd, fval)
+
+        self.db.execute(str(query))
+
+    def delete(self, criterion: pypika.terms.Criterion):
+        query = pypika.Query.from_(self.table_name).where(criterion).delete()
+        self.db.execute(str(query))
+
+
+class SymptomDatabase(BaseTableDatabase):
+    """
+    The database (table) for symptoms.
+    """
+
+    def __init__(self, db: DatabaseNative) -> None:
+        super().__init__("symptoms", db)
+
+        # TODO: consider creating with PyPika
+        self.db.execute(
+            """
+CREATE TABLE IF NOT EXISTS `symptoms` (
+  `symptoms_id` INTEGER PRIMARY KEY AUTOINCREMENT,
+  `name` TEXT,
+  `academic` TEXT,
+  `visit` INTEGER
+)
+"""
+        )
+
+    def create(self, entry):
+        if isinstance(entry, Sequence):
+            return self.create_bulk(entry)
+        else:
+            res = self.create_bulk((entry,))
+
+            # single entry, return single result
+            return res[0]
+
+    def create_bulk(self, entries):
+        query = pypika.Query.into(self.table_name).columns("name", "academic", "visit")
+
+        for entry in entries:
+            query = query.insert(entry["name"], entry["academic"], entry["visit"])
+
+        # PyPika does not support SQLite 'RETURNING'
+        # query = query.returning("symptoms_id") # TODO
+        query_str = str(query) + "RETURNING(`symptoms_id`)"
+
+        # return: auto & default fields
+        res = self.db.execute(query_str)
+        return res
+
+    def query_value(
+        self,
+        entry,
+        select_fields: tuple[str, ...] = ("symptoms_id", "name", "academic", "visit"),
+    ):
+        table, criterion = self.criterion_selector()
+        for fd, fval in entry.items():
+            criterion = criterion & (getattr(table, fd) == fval)
+
+        return self.query(criterion, select_fields)
+
+    def query(
+        self,
+        criterion: pypika.terms.Criterion,
+        fields: tuple[str, ...] = ("symptoms_id", "name", "academic", "visit"),
     ):
         query = pypika.Query.from_(self.table_name).select(*fields).where(criterion)
         res = self.db.execute(str(query))
