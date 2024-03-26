@@ -255,3 +255,117 @@ CREATE TABLE IF NOT EXISTS `symptoms` (
         select_fields: tuple[str, ...] = ("symptoms_id", "name", "academic", "visit"),
     ):
         return super().query_value(entry, select_fields)
+
+
+class BulletinDatabase(BaseTableDatabase):
+    """
+    The database (table) for bulletins.
+    """
+
+    def __init__(self, db: DatabaseNative) -> None:
+        super().__init__("bulletins", db)
+
+        self.db.execute(
+            """
+CREATE TABLE IF NOT EXISTS `bulletins` (
+  `bulletin_id` INTEGER PRIMARY KEY AUTOINCREMENT,
+  `class` TEXT,
+  `user_id` INTEGER,
+  `title` TEXT,
+  `content` TEXT,
+  `update_at` TEXT,
+  `create_at` TEXT
+)
+"""
+        )
+
+    def create_bulk(self, entries):
+        return self.create_bulk_from(
+            entries,
+            ("class", "user_id", "title", "content", "update_at", "create_at"),
+            ("bulletin_id",),
+        )
+
+    def query(
+        self,
+        criterion: pypika.terms.Criterion,
+        select_fields: tuple[str, ...] = (
+            "bulletin_id",
+            "class",
+            "user_id",
+            "title",
+            "content",
+            "update_at",
+            "create_at",
+        ),
+    ):
+        return super().query(criterion, select_fields)
+
+    def query_value(
+        self,
+        entry,
+        select_fields: tuple[str, ...] = (
+            "bulletin_id",
+            "class",
+            "user_id",
+            "title",
+            "content",
+            "update_at",
+            "create_at",
+        ),
+    ):
+        return super().query_value(entry, select_fields)
+
+
+class ClinicDatabase(BaseTableDatabase):
+    """
+    The database (table) for regional clinic informations.
+    """
+
+    def __init__(self, db: DatabaseNative) -> None:
+        super().__init__("bulletins", db)
+
+        self.db.execute(
+            """
+CREATE TABLE IF NOT EXISTS `bulletins` (
+  `clinic_id` INTEGER PRIMARY KEY AUTOINCREMENT,
+  `name` TEXT,
+  `address` TEXT,
+  `contact` TEXT,
+  `owner_id` INTEGER
+)
+"""
+        )
+
+    def create_bulk(self, entries):
+        return self.create_bulk_from(
+            entries,
+            ("name", "address", "contact", "owner_id"),
+            ("clinic_id",),
+        )
+
+    def query(
+        self,
+        criterion: pypika.terms.Criterion,
+        select_fields: tuple[str, ...] = (
+            "clinic_id",
+            "name",
+            "address",
+            "contact",
+            "owner_id",
+        ),
+    ):
+        return super().query(criterion, select_fields)
+
+    def query_value(
+        self,
+        entry,
+        select_fields: tuple[str, ...] = (
+            "clinic_id",
+            "name",
+            "address",
+            "contact",
+            "owner_id",
+        ),
+    ):
+        return super().query_value(entry, select_fields)
