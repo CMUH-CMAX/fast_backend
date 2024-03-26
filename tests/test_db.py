@@ -2,26 +2,72 @@ import os
 import sys
 import unittest
 
+# A workaround trick for importing source modules. Just fine for testing.
 sys.path.append(os.path.abspath("."))
 
-import db
+# pylint: disable = wrong-import-position
+from db import BaseTableDatabase, DatabaseNative
+
+
+class SampleUserDatabase(BaseTableDatabase):
+    """
+    The database (table) for user identity.
+    """
+
+    def __init__(self, db: DatabaseNative) -> None:
+        super().__init__("users", db)
+
+        # TODO: consider creating with PyPika
+        self.db.execute(
+            """
+CREATE TABLE IF NOT EXISTS `users` (
+  `user_id` INTEGER PRIMARY KEY AUTOINCREMENT,
+  `permissions` INTEGER,
+  `auth_method` VARCHAR(16)
+)
+"""
+        )
+
+    def create_bulk(self, entries):
+        return self.create_bulk_from(
+            entries, ("permissions", "auth_method"), ("user_id",)
+        )
+
+    def query(
+        self,
+        criterion,
+        select_fields: tuple[str, ...] = ("user_id", "permissions", "auth_method"),
+    ):
+        return super().query(criterion, select_fields)
+
+    def query_value(
+        self,
+        entry,
+        select_fields: tuple[str, ...] = ("user_id", "permissions", "auth_method"),
+    ):
+        return super().query_value(entry, select_fields)
 
 
 # TODO: use `self.assert*`
-class UserDatabaseTestCase(unittest.TestCase):
+# pylint: disable = invalid-name, missing-function-docstring
+class BasicDatabaseTestCase(unittest.TestCase):
+    """
+    Tests overriding base table with sample schema.
+    """
+
     def setUp(self):
         os.makedirs(".test", exist_ok=True)
         with open(".test/_test_db_test.db", "w", encoding="utf-8"):
             # truncate test db file
             pass
 
-        self.db = db.DatabaseNative(".test/_test_db_test.db")
-        self.udb = db.UserDatabase(self.db)
+        self.db = DatabaseNative(".test/_test_db_test.db")
+        self.udb = SampleUserDatabase(self.db)
 
     def testCreateTable(self):
         self.db.execute("DROP TABLE users")
 
-        self.udb = db.UserDatabase(self.db)
+        self.udb = SampleUserDatabase(self.db)
         self.db.execute("SELECT * FROM users")  # will error if not exist
 
     def testCreate(self):

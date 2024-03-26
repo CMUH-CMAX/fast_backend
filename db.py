@@ -165,8 +165,6 @@ class BaseTableDatabase(ABC):
         raise NotImplementedError
 
 
-# TODO: version 1.0 schema
-# TODO: use TEXT (SQLite does not impose any length restrictions)
 class UserDatabase(BaseTableDatabase):
     """
     The database (table) for user identity.
@@ -175,33 +173,47 @@ class UserDatabase(BaseTableDatabase):
     def __init__(self, db: DatabaseNative) -> None:
         super().__init__("users", db)
 
-        # TODO: consider creating with PyPika
+        # VARCHAR/TEXT: SQLite does not impose any length restrictions
         self.db.execute(
             """
 CREATE TABLE IF NOT EXISTS `users` (
   `user_id` INTEGER PRIMARY KEY AUTOINCREMENT,
-  `permissions` INTEGER,
-  `auth_method` VARCHAR(16)
+  `username` TEXT,
+  `password` TEXT,
+  `permission` INTEGER,
+  `auth_method` TEXT
 )
 """
         )
 
     def create_bulk(self, entries):
         return self.create_bulk_from(
-            entries, ("permissions", "auth_method"), ("user_id",)
+            entries, ("username", "password", "permission", "auth_method"), ("user_id",)
         )
 
     def query(
         self,
         criterion: pypika.terms.Criterion,
-        select_fields: tuple[str, ...] = ("user_id", "permissions", "auth_method"),
+        select_fields: tuple[str, ...] = (
+            "user_id",
+            "username",
+            "password",
+            "permission",
+            "auth_method",
+        ),
     ):
         return super().query(criterion, select_fields)
 
     def query_value(
         self,
         entry,
-        select_fields: tuple[str, ...] = ("user_id", "permissions", "auth_method"),
+        select_fields: tuple[str, ...] = (
+            "user_id",
+            "username",
+            "password",
+            "permission",
+            "auth_method",
+        ),
     ):
         return super().query_value(entry, select_fields)
 
@@ -214,7 +226,6 @@ class SymptomDatabase(BaseTableDatabase):
     def __init__(self, db: DatabaseNative) -> None:
         super().__init__("symptoms", db)
 
-        # TODO: consider creating with PyPika
         self.db.execute(
             """
 CREATE TABLE IF NOT EXISTS `symptoms` (
