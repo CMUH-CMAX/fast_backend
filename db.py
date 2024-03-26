@@ -10,12 +10,19 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseNative:
+    """
+    Connection to native (SQLite) database.
+    """
+
     def __init__(self, db_path, password=None):
         self.conn = sqlite3.connect(db_path)
         if password is not None:
             raise NotImplementedError
 
     def execute(self, script):
+        """
+        Execute database script (in SQL), and return all values fetched.
+        """
         logger.debug(script)
 
         cursor = self.conn.cursor()
@@ -25,6 +32,9 @@ class DatabaseNative:
         return res
 
     def vacuum(self):
+        """
+        Perform regular database maintenance.
+        """
         cursor = self.conn.cursor()
         cursor.execute("VACUUM")
 
