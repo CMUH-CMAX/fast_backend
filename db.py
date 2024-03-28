@@ -355,11 +355,11 @@ class ClinicDatabase(BaseTableDatabase):
     """
 
     def __init__(self, db: DatabaseNative) -> None:
-        super().__init__("bulletins", db)
+        super().__init__("clinics", db)
 
         self.db.execute(
             """
-CREATE TABLE IF NOT EXISTS `bulletins` (
+CREATE TABLE IF NOT EXISTS `clinics` (
   `clinic_id` INTEGER PRIMARY KEY AUTOINCREMENT,
   `name` TEXT,
   `address` TEXT,
@@ -425,3 +425,7 @@ class MasterDatabase:
 
         table = self.tables[table_name]
         return table.query_value(entry)  # type: ignore
+
+    def get_table(self, table_name: str):
+        table = self.tables[table_name]
+        return table

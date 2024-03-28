@@ -54,6 +54,6 @@ def init_all(db):
                 "name": clinic["name"],
                 "address": clinic["address"],
                 "contact": clinic["number"],
-                "owner_id": doctor["user_id"],
+                "owner_id": doctor,
             },
         )

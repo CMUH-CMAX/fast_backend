@@ -1,12 +1,15 @@
+import json
 import os
 import sys
 import unittest
+
+import pypika.functions as fn
 
 # A workaround trick for importing source modules. Just fine for testing.
 sys.path.append(os.path.abspath("."))
 
 # pylint: disable = wrong-import-position
-from db import BaseTableDatabase, DatabaseNative
+from db import BaseTableDatabase, DatabaseNative, MasterDatabase
 
 
 class SampleUserDatabase(BaseTableDatabase):
@@ -57,11 +60,11 @@ class BasicDatabaseTestCase(unittest.TestCase):
 
     def setUp(self):
         os.makedirs(".test", exist_ok=True)
-        with open(".test/_test_db_test.db", "w", encoding="utf-8"):
+        with open(".test/_db_basic_database.db", "w", encoding="utf-8"):
             # truncate test db file
             pass
 
-        self.db = DatabaseNative(".test/_test_db_test.db")
+        self.db = DatabaseNative(".test/_db_basic_database.db")
         self.udb = SampleUserDatabase(self.db)
 
     def testCreateTable(self):
@@ -293,7 +296,105 @@ class BasicDatabaseTestCase(unittest.TestCase):
         del self.udb
         del self.db
 
-        os.remove(".test/_test_db_test.db")
+        os.remove(".test/_db_basic_database.db")
+
+
+class TestFakeDatabaseInit(unittest.TestCase):
+    """
+    Tests fake_db_init
+    """
+
+    def setUp(self):
+        os.makedirs(".test", exist_ok=True)
+        with open(".test/_db_fake_database.db", "w", encoding="utf-8"):
+            # truncate test db file
+            pass
+
+        self.db = MasterDatabase(".test/_db_fake_database.db")
+
+        self.SYMPTOMS = [
+            {"name": "發燒", "academic": "pyrexia", "visit": 3579},
+            {"name": "紅疹", "academic": "rash", "visit": 1324},
+            {"name": "下腹疼痛", "academic": "abdominal-pain", "visit": 1223},
+            {"name": "頭暈", "academic": "vertigo", "visit": 1139},
+            {"name": "畏寒", "academic": "rigor", "visit": 1024},
+            {"name": "腹瀉", "academic": "diarrhea", "visit": 1591},
+            {"name": "皮膚過敏", "academic": "allergic-dermatitis", "visit": 1234},
+            {"name": "流鼻水", "academic": "rhinorrhea", "visit": 1842},
+            {"name": "打噴嚏", "academic": "sneeze", "visit": 924},
+            {"name": "偏頭痛", "academic": "migraine", "visit": 434},
+            {"name": "牙齦紅腫", "academic": "gingivitis", "visit": 124},
+            {"name": "口臭", "academic": "halitosis", "visit": 324},
+        ]
+
+        self.OO_MAN_NEWS = [
+            {
+                "class": "warning",
+                "user_id": 1,
+                "title": "驚爆！！！大O男出沒中央大學！",
+                "content": "城市驚現超級大O男，引起市民熱議和媒體關注，成為社交媒體熱門話題。",
+                "update_at": "2024/03/18 22:47:14",
+                "create_at": "2024/03/18 22:47:14",
+            }
+        ]
+
+        with open("data/clinics.jsonl", "r", encoding="utf8") as file:
+            self.CLINICS = [json.loads(line) for line in file]
+
+        for s in self.SYMPTOMS:
+            self.db.create("symptoms", s)
+
+        for every_man in self.OO_MAN_NEWS:
+            self.db.create("bulletins", every_man)
+
+        self.doctor = self.db.create(
+            "users",
+            {
+                "username": "real_doctor",
+                "password": "safe_password",
+                "permission": 1,
+                "auth_method": "password",  # Facebook, Google, ..., etc.
+            },
+        )
+
+        for clinic in self.CLINICS:  # need a owner
+            self.db.create(
+                "clinics",
+                {
+                    "name": clinic["name"],
+                    "address": clinic["address"],
+                    "contact": clinic["number"],
+                    "owner_id": self.doctor,
+                },
+            )
+
+    def testClinics(self):
+        res = self.db.read("clinics", {"name": "萬安中醫診所"})
+        assert any(
+            ent["address"] == "台中市西屯區重慶路１３１號１樓" for ent in res
+        )  # TODO: failed protocol
+
+        tb = self.db.get_table("clinics")
+        table, _ = tb.criterion_selector()
+        assert len(tb.query(fn.Substring(table.address, 1, 3) == "高雄市")) == 441
+
+    def testUsers(self):
+        res = self.db.read("users")
+        assert len(res) == 1 and res[0]["password"] == "safe_password"  # TODO
+
+    def testSymptoms(self):
+        assert self.db.read("symptoms") == self.SYMPTOMS  # TODO: failed protocol
+
+    def testBulletins(self):
+        res = self.db.read("bulletins")
+        assert (
+            len(res) == 1 and "社交媒體熱門話題" in res[0]["content"]
+        )  # TODO: failed protocol
+
+    def tearDown(self):
+        del self.db
+
+        os.remove(".test/_db_fake_database.db")
 
 
 if __name__ == "__main__":
