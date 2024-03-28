@@ -31,11 +31,9 @@ BIG_DICK_MAN_NEWS = [
 
 
 def init_all(db):
-    for s in SYMPTOMS:
-        db.create("symptoms", s)
+    db.create("symptoms", SYMPTOMS)
 
-    for every_big_dick_man in BIG_DICK_MAN_NEWS:
-        db.create("bulletins", every_big_dick_man)
+    db.create("bulletins", BIG_DICK_MAN_NEWS)
 
     doctor = db.create(
         "users",
@@ -47,9 +45,9 @@ def init_all(db):
         },
     )
 
+    clinics = []
     for clinic in CLINICS:  # need a owner
-        db.create(
-            "clinics",
+        clinics.append(
             {
                 "name": clinic["name"],
                 "address": clinic["address"],
@@ -57,3 +55,5 @@ def init_all(db):
                 "owner_id": doctor,
             },
         )
+
+    db.create("clinics", clinics)
