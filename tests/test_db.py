@@ -3,8 +3,6 @@ import os
 import sys
 import unittest
 
-import pypika.functions as fn
-
 # A workaround trick for importing source modules. Just fine for testing.
 sys.path.append(os.path.abspath("."))
 
@@ -18,7 +16,7 @@ class SampleUserDatabase(BaseTableDatabase):
     """
 
     def __init__(self, db: DatabaseNative) -> None:
-        super().__init__("users", db)
+        super().__init__("users", db, ("user_id", "permissions", "auth_method"))
 
         # TODO: consider creating with PyPika
         self.db.execute(
@@ -341,11 +339,13 @@ class TestFakeDatabaseInit(unittest.TestCase):
         with open("data/clinics.jsonl", "r", encoding="utf8") as file:
             self.CLINICS = [json.loads(line) for line in file]
 
-        for s in self.SYMPTOMS:
-            self.db.create("symptoms", s)
+        self.db.create("symptoms", self.SYMPTOMS)
+        # for s in self.SYMPTOMS:
+        #     self.db.create("symptoms", s)
 
-        for every_man in self.OO_MAN_NEWS:
-            self.db.create("bulletins", every_man)
+        self.db.create("bulletins", self.OO_MAN_NEWS)
+        # for every_man in self.OO_MAN_NEWS:
+        #     self.db.create("bulletins", every_man)
 
         self.doctor = self.db.create(
             "users",
@@ -357,39 +357,47 @@ class TestFakeDatabaseInit(unittest.TestCase):
             },
         )
 
+        self.clinics = []
         for clinic in self.CLINICS:  # need a owner
-            self.db.create(
-                "clinics",
+            self.clinics.append(
                 {
                     "name": clinic["name"],
                     "address": clinic["address"],
                     "contact": clinic["number"],
                     "owner_id": self.doctor,
-                },
+                }
             )
+
+        self.db.create("clinics", self.clinics)
 
     def testClinics(self):
         res = self.db.read("clinics", {"name": "萬安中醫診所"})
-        assert any(
-            ent["address"] == "台中市西屯區重慶路１３１號１樓" for ent in res
-        )  # TODO: failed protocol
+        assert any(ent["address"] == "台中市西屯區重慶路１３１號１樓" for ent in res)
 
-        tb = self.db.get_table("clinics")
-        table, _ = tb.criterion_selector()
-        assert len(tb.query(fn.Substring(table.address, 1, 3) == "高雄市")) == 441
+        # PyPika does not support SQLite substr() yet
+        # See: pypika.functions
+        # tb = self.db.get_table("clinics")
+        # table, _ = tb.criterion_selector()
+        # assert len(tb.query(fn.Substring(table.address, 1, 3) == "高雄市")) == 441
+
+        res = self.db.read("clinics", select_fields=("address",))
+        assert list(map(lambda clinic: clinic["address"], self.CLINICS)) == list(
+            map(lambda clinic: clinic["address"], res)
+        )
 
     def testUsers(self):
         res = self.db.read("users")
         assert len(res) == 1 and res[0]["password"] == "safe_password"  # TODO
 
     def testSymptoms(self):
-        assert self.db.read("symptoms") == self.SYMPTOMS  # TODO: failed protocol
+        assert (
+            self.db.read("symptoms", select_fields=("name", "academic", "visit"))
+            == self.SYMPTOMS
+        )
 
     def testBulletins(self):
         res = self.db.read("bulletins")
-        assert (
-            len(res) == 1 and "社交媒體熱門話題" in res[0]["content"]
-        )  # TODO: failed protocol
+        assert len(res) == 1 and "社交媒體熱門話題" in res[0]["content"]
 
     def tearDown(self):
         del self.db

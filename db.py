@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Sequence, Mapping
 import logging
 import sqlite3
+from types import MappingProxyType
 
 import pypika  # type: ignore
 
@@ -81,9 +82,12 @@ class BaseTableDatabase(ABC):
     Perform data operation through DatabaseNative.
     """
 
-    def __init__(self, table_name: str, db: DatabaseNative) -> None:
+    def __init__(
+        self, table_name: str, db: DatabaseNative, fields: tuple[str, ...]
+    ) -> None:
         self.db = db
         self.table_name = table_name
+        self.fields = fields
 
     def criterion_selector(self) -> tuple[pypika.Table, pypika.terms.Criterion]:
         """
@@ -137,11 +141,10 @@ class BaseTableDatabase(ABC):
     def query(
         self,
         criterion: pypika.terms.Criterion,
-        select_fields: tuple[str, ...],
+        select_fields: tuple[str, ...] = ("*",),
     ):
         """
         Query table for entries that satisfies `criterion`, selecting `select_fields`.
-        Override this method for default `select_fields`.
         """
         query = (
             pypika.Query.from_(self.table_name).select(*select_fields).where(criterion)
@@ -152,11 +155,10 @@ class BaseTableDatabase(ABC):
     def query_value(
         self,
         entry,
-        select_fields: tuple[str, ...],
+        select_fields: tuple[str, ...] = ("*",),
     ):
         """
         Query table for entries that have fields specified in `entry`, selecting `select_fields`.
-        Override this method for default `select_fields`.
         """
 
         table, criterion = self.criterion_selector()
@@ -164,12 +166,6 @@ class BaseTableDatabase(ABC):
             criterion = criterion & (getattr(table, fd) == fval)
 
         return self.query(criterion, select_fields)
-
-    def read(self, *args, **kwargs):
-        """
-        Alias of `query`.
-        """
-        return self.query(*args, **kwargs)
 
     def update(self, criterion: pypika.terms.Criterion, entry: dict[str, str]):
         """
@@ -203,7 +199,17 @@ class UserDatabase(BaseTableDatabase):
     """
 
     def __init__(self, db: DatabaseNative) -> None:
-        super().__init__("users", db)
+        super().__init__(
+            "users",
+            db,
+            (
+                "user_id",
+                "username",
+                "password",
+                "permission",
+                "auth_method",
+            ),
+        )
 
         # VARCHAR/TEXT: SQLite does not impose any length restrictions
         self.db.execute(
@@ -223,32 +229,6 @@ CREATE TABLE IF NOT EXISTS `users` (
             entries, ("username", "password", "permission", "auth_method"), ("user_id",)
         )
 
-    def query(
-        self,
-        criterion: pypika.terms.Criterion,
-        select_fields: tuple[str, ...] = (
-            "user_id",
-            "username",
-            "password",
-            "permission",
-            "auth_method",
-        ),
-    ):
-        return super().query(criterion, select_fields)
-
-    def query_value(
-        self,
-        entry,
-        select_fields: tuple[str, ...] = (
-            "user_id",
-            "username",
-            "password",
-            "permission",
-            "auth_method",
-        ),
-    ):
-        return super().query_value(entry, select_fields)
-
 
 class SymptomDatabase(BaseTableDatabase):
     """
@@ -256,7 +236,7 @@ class SymptomDatabase(BaseTableDatabase):
     """
 
     def __init__(self, db: DatabaseNative) -> None:
-        super().__init__("symptoms", db)
+        super().__init__("symptoms", db, ("symptoms_id", "name", "academic", "visit"))
 
         self.db.execute(
             """
@@ -274,20 +254,6 @@ CREATE TABLE IF NOT EXISTS `symptoms` (
             entries, ("name", "academic", "visit"), ("symptoms_id",)
         )
 
-    def query(
-        self,
-        criterion: pypika.terms.Criterion,
-        select_fields: tuple[str, ...] = ("symptoms_id", "name", "academic", "visit"),
-    ):
-        return super().query(criterion, select_fields)
-
-    def query_value(
-        self,
-        entry,
-        select_fields: tuple[str, ...] = ("symptoms_id", "name", "academic", "visit"),
-    ):
-        return super().query_value(entry, select_fields)
-
 
 class BulletinDatabase(BaseTableDatabase):
     """
@@ -295,7 +261,19 @@ class BulletinDatabase(BaseTableDatabase):
     """
 
     def __init__(self, db: DatabaseNative) -> None:
-        super().__init__("bulletins", db)
+        super().__init__(
+            "bulletins",
+            db,
+            (
+                "bulletin_id",
+                "class",
+                "user_id",
+                "title",
+                "content",
+                "update_at",
+                "create_at",
+            ),
+        )
 
         self.db.execute(
             """
@@ -318,36 +296,6 @@ CREATE TABLE IF NOT EXISTS `bulletins` (
             ("bulletin_id",),
         )
 
-    def query(
-        self,
-        criterion: pypika.terms.Criterion,
-        select_fields: tuple[str, ...] = (
-            "bulletin_id",
-            "class",
-            "user_id",
-            "title",
-            "content",
-            "update_at",
-            "create_at",
-        ),
-    ):
-        return super().query(criterion, select_fields)
-
-    def query_value(
-        self,
-        entry,
-        select_fields: tuple[str, ...] = (
-            "bulletin_id",
-            "class",
-            "user_id",
-            "title",
-            "content",
-            "update_at",
-            "create_at",
-        ),
-    ):
-        return super().query_value(entry, select_fields)
-
 
 class ClinicDatabase(BaseTableDatabase):
     """
@@ -355,7 +303,17 @@ class ClinicDatabase(BaseTableDatabase):
     """
 
     def __init__(self, db: DatabaseNative) -> None:
-        super().__init__("clinics", db)
+        super().__init__(
+            "clinics",
+            db,
+            (
+                "clinic_id",
+                "name",
+                "address",
+                "contact",
+                "owner_id",
+            ),
+        )
 
         self.db.execute(
             """
@@ -376,32 +334,6 @@ CREATE TABLE IF NOT EXISTS `clinics` (
             ("clinic_id",),
         )
 
-    def query(
-        self,
-        criterion: pypika.terms.Criterion,
-        select_fields: tuple[str, ...] = (
-            "clinic_id",
-            "name",
-            "address",
-            "contact",
-            "owner_id",
-        ),
-    ):
-        return super().query(criterion, select_fields)
-
-    def query_value(
-        self,
-        entry,
-        select_fields: tuple[str, ...] = (
-            "clinic_id",
-            "name",
-            "address",
-            "contact",
-            "owner_id",
-        ),
-    ):
-        return super().query_value(entry, select_fields)
-
 
 class MasterDatabase:
     def __init__(self, db_path: str) -> None:
@@ -419,12 +351,48 @@ class MasterDatabase:
         table = self.tables[table_name]
         return table.create(entry)
 
-    def read(self, table_name: str, entry: dict[str, object] | None = None):
-        if entry is None:
-            entry = {}
-
+    def query(
+        self,
+        table_name: str,
+        criterion: pypika.terms.Criterion,
+        select_fields: tuple[str, ...] = ("*",),
+    ):
         table = self.tables[table_name]
-        return table.query_value(entry)  # type: ignore
+        return table.query(criterion, select_fields)  # type: ignore
+
+    def query_value(
+        self,
+        table_name: str,
+        entry,
+        select_fields: tuple[str, ...] = ("*",),
+    ):
+        table = self.tables[table_name]
+        return table.query_value(entry, select_fields)  # type: ignore
+
+    def read(
+        self,
+        table_name: str,
+        entry: Mapping[str, object] | None = MappingProxyType({}),
+        select_fields=("*",),
+    ):
+        """
+        Query entries with fields equal to `entry`, in key-value mapping.
+        """
+        table = self.tables[table_name]
+        res = self.query_value(table_name, entry, select_fields)
+
+        keys = table.fields if select_fields == ("*",) else select_fields
+        return [dict(zip(keys, ent)) for ent in res]
+
+    def update(
+        self, table_name: str, criterion: pypika.terms.Criterion, entry: dict[str, str]
+    ):
+        table = self.tables[table_name]
+        return table.update(criterion, entry)  # type: ignore
+
+    def delete(self, table_name: str, criterion: pypika.terms.Criterion):
+        table = self.tables[table_name]
+        return table.delete(criterion)  # type: ignore
 
     def get_table(self, table_name: str):
         table = self.tables[table_name]
