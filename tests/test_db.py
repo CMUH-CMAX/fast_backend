@@ -7,7 +7,13 @@ import unittest
 sys.path.append(os.path.abspath("."))
 
 # pylint: disable = wrong-import-position
-from db import BaseTableDatabase, DatabaseNative, MasterDatabase
+from db import (
+    BaseTableDatabase,
+    DatabaseNative,
+    MasterDatabase,
+    gen_password_hash,
+    check_password_hash,
+)
 
 
 class SampleUserDatabase(BaseTableDatabase):
@@ -351,7 +357,7 @@ class TestFakeDatabaseInit(unittest.TestCase):
             "users",
             {
                 "username": "real_doctor",
-                "password": "safe_password",
+                "password": gen_password_hash("safe_password"),
                 "permission": 1,
                 "auth_method": "password",  # Facebook, Google, ..., etc.
             },
@@ -387,7 +393,9 @@ class TestFakeDatabaseInit(unittest.TestCase):
 
     def testUsers(self):
         res = self.db.read("users")
-        assert len(res) == 1 and res[0]["password"] == "safe_password"  # TODO
+        assert len(res) == 1 and check_password_hash(
+            "safe_password", res[0]["password"]
+        )
 
     def testSymptoms(self):
         assert (

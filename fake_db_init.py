@@ -1,5 +1,7 @@
 import json
 
+from db import gen_password_hash
+
 with open("data/clinics.jsonl", "r", encoding="utf8") as file:
     CLINICS = [json.loads(line) for line in file]
 
@@ -39,7 +41,7 @@ def init_all(db):
         "users",
         {
             "username": "real_doctor",
-            "password": "safe_password",
+            "password": gen_password_hash("safe_password"),
             "permission": 1,
             "auth_method": "password",  # Facebook, Google, ..., etc.
         },

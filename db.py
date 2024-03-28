@@ -1,9 +1,12 @@
 from abc import ABC, abstractmethod
+import base64
+import binascii
 from collections.abc import Sequence, Mapping
 import logging
 import sqlite3
 from types import MappingProxyType
 
+import bcrypt
 import pypika  # type: ignore
 
 
@@ -40,6 +43,20 @@ DB_PROPERTY = {
         "owner_id": {"dtype": "int"},
     },
 }
+
+
+def gen_password_hash(password: str):
+    hash_bytes = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+    return base64.b64encode(hash_bytes).decode()
+
+
+def check_password_hash(password: str, hash_: bytes):
+    try:
+        hash_bytes = base64.b64decode(hash_)
+    except binascii.Error:
+        return False
+
+    return bcrypt.checkpw(password.encode(), hash_bytes)
 
 
 class DatabaseNative:
