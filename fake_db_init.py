@@ -1,4 +1,5 @@
 import json
+import random
 #CLINICS = json.load(open("data/clinics.json", "r"))
 CLINICS = [json.loads(line) for line in open("data/clinics.jsonl", "r")]
 
@@ -72,6 +73,12 @@ BIG_DICK_MAN_NEWS = [{
   "update_at": "2024/03/18 22:47:14",
   "create_at": "2024/03/18 22:47:14"
 }]
+
+def get_random_items(array, count=None):
+    if count is None:
+        count = random.randint(1, len(array) // 2)
+    return random.sample(array, count)
+
 def init_all(db):
     for s in SYMPTOMS:
         db.create('symptoms', s)
@@ -87,8 +94,9 @@ def init_all(db):
 
     for clinic in CLINICS: # need a owner
         db.create("clinics", {
-            'name': clinic['name'],
+            'title': clinic['name'],
             'address': clinic['address'],
-            'contact': clinic['number'],
+            'tel': clinic['number'],
             'owner_id': doctor['user_id'],
+            'tags': (get_random_items(['家庭醫學', '婦科', '皮膚', '內分泌', '泌尿'])),
         })
