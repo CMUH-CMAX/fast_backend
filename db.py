@@ -3,7 +3,7 @@ from collections.abc import Sequence
 import logging
 import sqlite3
 
-import pypika
+import pypika  # type: ignore
 
 
 logger = logging.getLogger(__name__)
@@ -401,3 +401,27 @@ CREATE TABLE IF NOT EXISTS `bulletins` (
         ),
     ):
         return super().query_value(entry, select_fields)
+
+
+class MasterDatabase:
+    def __init__(self, db_path: str) -> None:
+        self.db = DatabaseNative(db_path)
+        self.tables: dict[str, BaseTableDatabase] = {
+            "users": UserDatabase(self.db),
+            "symptoms": SymptomDatabase(self.db),
+            "bulletins": BulletinDatabase(self.db),
+            "clinics": ClinicDatabase(self.db),
+        }
+
+    def create(
+        self, table_name: str, entry: dict[str, object] | Sequence[dict[str, object]]
+    ):
+        table = self.tables[table_name]
+        return table.create(entry)
+
+    def read(self, table_name: str, entry: dict[str, object] | None = None):
+        if entry is None:
+            entry = {}
+
+        table = self.tables[table_name]
+        return table.query_value(entry)  # type: ignore
