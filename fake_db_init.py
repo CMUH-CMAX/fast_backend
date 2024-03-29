@@ -1,4 +1,5 @@
 import json
+import random
 
 from db import gen_password_hash
 
@@ -32,6 +33,12 @@ BIG_DICK_MAN_NEWS = [
 ]
 
 
+def get_random_items(array, count=None):
+    if count is None:
+        count = random.randint(1, len(array) // 2)
+    return random.sample(array, count)
+
+
 def init_all(db):
     db.create("symptoms", SYMPTOMS)
 
@@ -51,11 +58,14 @@ def init_all(db):
     for clinic in CLINICS:  # need a owner
         clinics.append(
             {
-                "name": clinic["name"],
+                "title": clinic["name"],
                 "address": clinic["address"],
-                "contact": clinic["number"],
-                "owner_id": doctor,
-            },
+                "tel": clinic["number"],
+                "owner_id": doctor["user_id"],
+                "tags": (
+                    get_random_items(["家庭醫學", "婦科", "皮膚", "內分泌", "泌尿"])
+                ),
+            }
         )
 
     db.create("clinics", clinics)

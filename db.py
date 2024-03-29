@@ -37,9 +37,10 @@ DB_PROPERTY = {
     },
     "clinics": {
         "clinic_id": {"dtype": "int", "auto_increment": True},
-        "name": {"dtype": "str"},
+        "title": {"dtype": "str"},
         "address": {"dtype": "str"},
-        "contact": {"dtype": "str"},
+        "tel": {"dtype": "str"},
+        "tags": {"dtype": "array"},
         "owner_id": {"dtype": "int"},
     },
 }
