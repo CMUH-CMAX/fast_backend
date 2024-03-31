@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import base64
 import binascii
 from collections.abc import Collection, Mapping, Sequence
+import json
 import logging
 import sqlite3
 from types import MappingProxyType
@@ -118,6 +119,7 @@ class ExtendedColumn(pypika.Column):
         dtype = {
             "str": "TEXT",
             "int": "INTEGER",
+            "array": "CUSTOM_ARRAY",
         }[str(prop_super.pop("dtype"))]
 
         extend_attrib = {}
@@ -134,7 +136,8 @@ class DatabaseNative:
     """
 
     def __init__(self, db_path, password=None):
-        self.conn = sqlite3.connect(db_path)
+        sqlite3.register_converter("CUSTOM_ARRAY", json.loads)  # convert array at read
+        self.conn = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES)
         if password is not None:
             raise NotImplementedError
 

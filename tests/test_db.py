@@ -307,7 +307,119 @@ class BasicDatabaseTestCase(unittest.TestCase):
         os.remove(".test/_db_basic_database.db")
 
 
-class TestFakeDatabaseInit(unittest.TestCase):
+class DtypeTestCase(unittest.TestCase):
+    def setUp(self):
+        os.makedirs(".test", exist_ok=True)
+        with open(".test/_db_dtype.db", "w", encoding="utf-8"):
+            # truncate test db file
+            pass
+
+        self.ndb = DatabaseNative(".test/_db_dtype.db")
+
+    def testBasicTypes(self):
+        class TestBasicTypesTable(BaseTableDatabase):
+            def __init__(self, db: DatabaseNative) -> None:
+                super().__init__(
+                    "basic",
+                    db,
+                    {
+                        "columns": {
+                            "key_int": {
+                                "dtype": "int",
+                                "primary": True,
+                                "auto_increment": True,
+                            },
+                            "dat_int": {"dtype": "int"},
+                            "dat_str": {"dtype": "str"},
+                        },
+                    },
+                )
+
+            def create_bulk(self, entries):
+                return self.create_bulk_from(
+                    entries,
+                    ("dat_int", "dat_str"),
+                    ("key_int",),
+                )
+
+        basic = TestBasicTypesTable(self.ndb)
+        datas = [
+            {"dat_int": 123, "dat_str": "ABCDEG"},
+            {"dat_int": 0, "dat_str": "NONE"},
+            {"dat_int": -1, "dat_str": "XYZ"},
+            {"dat_int": 88888, "dat_str": "h_e_l_l_o_"},
+        ]
+
+        basic.create(datas)
+        assert basic.query_value({}) == [
+            (1, 123, "ABCDEG"),
+            (2, 0, "NONE"),
+            (3, -1, "XYZ"),
+            (4, 88888, "h_e_l_l_o_"),
+        ]
+
+    def testArrayType(self):
+        class TestArrayTable(BaseTableDatabase):
+            def __init__(self, db: DatabaseNative) -> None:
+                super().__init__(
+                    "array",
+                    db,
+                    {
+                        "columns": {
+                            "key_int": {"dtype": "int"},
+                            "dat_array": {"dtype": "array"},
+                        },
+                    },
+                )
+
+            def create_bulk(self, entries):
+                return self.create_bulk_from(
+                    entries,
+                    ("key_int", "dat_array"),
+                    (),
+                )
+
+        table = TestArrayTable(self.ndb)
+        datas = [
+            {"key_int": 1, "dat_array": []},
+            {"key_int": 2, "dat_array": [1, 2, 3]},
+            {"key_int": 3, "dat_array": ["a", "bb", "ccc"]},
+            {
+                "key_int": 888,
+                "dat_array": [
+                    "'single'",
+                    '"double"',
+                    "--comment",
+                    ";end_line",
+                    "UTF8編碼",
+                ],
+            },
+        ]
+
+        table.create(datas)
+        assert table.query_value({}) == [
+            (1, []),
+            (2, [1, 2, 3]),
+            (3, ["a", "bb", "ccc"]),
+            (
+                888,
+                [
+                    "'single'",
+                    '"double"',
+                    "--comment",
+                    ";end_line",
+                    "UTF8編碼",
+                ],
+            ),
+        ]
+
+    def tearDown(self):
+        del self.ndb
+
+        os.remove(".test/_db_dtype.db")
+
+
+class FakeDatabaseInitTestCase(unittest.TestCase):
     """
     Tests fake_db_init
     """
