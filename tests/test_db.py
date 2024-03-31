@@ -28,11 +28,14 @@ class SampleUserDatabase(BaseTableDatabase):
             db,
             {
                 "columns": {
-                    "user_id": {"dtype": "int", "auto_increment": True},
-                    "permission": {"dtype": "int"},
+                    "user_id": {
+                        "dtype": "int",
+                        "primary": True,
+                        "auto_increment": True,
+                    },
+                    "permissions": {"dtype": "int"},
                     "auth_method": {"dtype": "str"},
                 },
-                "primary": "user_id",
             },
         )
 

@@ -15,26 +15,24 @@ logger = logging.getLogger(__name__)
 DB_PROPERTY = {
     "users": {
         "columns": {
-            "user_id": {"dtype": "int", "auto_increment": True},
+            "user_id": {"dtype": "int", "primary": True, "auto_increment": True},
             "username": {"dtype": "str"},
             "password": {"dtype": "str"},
             "permission": {"dtype": "int"},
             "auth_method": {"dtype": "str"},
         },
-        "primary": "user_id",
     },
     "symptoms": {
         "columns": {
-            "symptoms_id": {"dtype": "int", "auto_increment": True},
+            "symptoms_id": {"dtype": "int", "primary": True, "auto_increment": True},
             "name": {"dtype": "str"},
             "academic": {"dtype": "str"},
             "visit": {"dtype": "int"},
         },
-        "primary": "symptoms_id",
     },
     "bulletins": {
         "columns": {
-            "bulletin_id": {"dtype": "int", "auto_increment": True},
+            "bulletin_id": {"dtype": "int", "primary": True, "auto_increment": True},
             "class": {"dtype": "str"},
             "user_id": {"dtype": "int"},
             "title": {"dtype": "str"},
@@ -42,18 +40,16 @@ DB_PROPERTY = {
             "update_at": {"dtype": "str"},
             "create_at": {"dtype": "str"},
         },
-        "primary": "bulletin_id",
     },
     "clinics": {
         "columns": {
-            "clinic_id": {"dtype": "int", "auto_increment": True},
+            "clinic_id": {"dtype": "int", "primary": True, "auto_increment": True},
             "title": {"dtype": "str"},
             "address": {"dtype": "str"},
             "tel": {"dtype": "str"},
             "tags": {"dtype": "array"},
             "owner_id": {"dtype": "int"},
         },
-        "primary": "clinic_id",
     },
 }
 
@@ -78,7 +74,10 @@ class ExtendedColumn(pypika.Column):
     Pypika has support for attributes ('nullable', 'default').
     """
 
-    EXTRA_ATTRIB = ("auto_increment",)
+    EXTRA_ATTRIB = (
+        "primary",
+        "auto_increment",
+    )
 
     def __init__(self, *args, extra_attr: Mapping[str, Collection[str]], **kwargs):
         super().__init__(*args, **kwargs)
@@ -86,10 +85,18 @@ class ExtendedColumn(pypika.Column):
 
     # pylint: disable=consider-using-f-string
     def get_sql(self, **kwargs) -> str:
+        primary = self.extra_attr.get("primary", False)
         auto_increment = self.extra_attr.get("auto_increment", False)
-        extra_sql = "{auto_increment}".format(
-            # SQLite only supports auto increment on primary key
-            auto_increment=(" PRIMARY KEY AUTOINCREMENT" if auto_increment else ""),
+
+        # SQLite only supports auto increment on primary key
+        if auto_increment and not primary:
+            raise SyntaxError(
+                "Auto-increment column is required to be primary (for SQLite)"
+            )
+
+        extra_sql = "{primary}{auto_increment}".format(
+            primary=(" PRIMARY KEY" if primary else ""),
+            auto_increment=(" AUTOINCREMENT" if auto_increment else ""),
         )
 
         column_sql = "{super_stmt}{extra_stmt}".format(
@@ -135,7 +142,7 @@ class DatabaseNative:
         """
         Execute database script (in SQL), and return all values fetched.
         """
-        logger.error(script)
+        logger.debug(script)
 
         cursor = self.conn.cursor()
         res = cursor.execute(script).fetchall()  # TODO: optimize fetch
@@ -180,11 +187,7 @@ class BaseTableDatabase(ABC):
             for name, prop in self.fields["columns"].items()
         ]
 
-        query = (
-            pypika.Query.create_table(self.table_name)
-            .columns(*columns)
-            .primary_key(self.fields["primary"])
-        )
+        query = pypika.Query.create_table(self.table_name).columns(*columns)
         self.db.execute(str(query))
 
     def criterion_selector(self) -> tuple[pypika.Table, pypika.terms.Criterion]:
