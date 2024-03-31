@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import sys
 import unittest
 
@@ -367,14 +368,24 @@ class TestFakeDatabaseInit(unittest.TestCase):
         for clinic in self.CLINICS:  # need a owner
             self.clinics.append(
                 {
-                    "name": clinic["name"],
+                    "title": clinic["name"],
                     "address": clinic["address"],
-                    "contact": clinic["number"],
-                    "owner_id": self.doctor,
+                    "tel": clinic["number"],
+                    "owner_id": self.doctor["user_id"],
+                    "tags": (
+                        self.get_random_items(
+                            ["家庭醫學", "婦科", "皮膚", "內分泌", "泌尿"]
+                        )
+                    ),
                 }
             )
 
         self.db.create("clinics", self.clinics)
+
+    def get_random_items(self, array, count=None):
+        if count is None:
+            count = random.randint(1, len(array) // 2)
+        return random.sample(array, count)
 
     def testClinics(self):
         res = self.db.read("clinics", {"name": "萬安中醫診所"})
