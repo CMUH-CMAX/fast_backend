@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import base64
 import binascii
-from collections.abc import Sequence, Mapping
+from collections.abc import Collection, Mapping, Sequence
 import logging
 import sqlite3
 from types import MappingProxyType
@@ -14,34 +14,46 @@ logger = logging.getLogger(__name__)
 
 DB_PROPERTY = {
     "users": {
-        "user_id": {"dtype": "int", "auto_increment": True},
-        "username": {"dtype": "str"},
-        "password": {"dtype": "str"},
-        "permission": {"dtype": "int"},
-        "auth_method": {"dtype": "str"},
+        "columns": {
+            "user_id": {"dtype": "int", "auto_increment": True},
+            "username": {"dtype": "str"},
+            "password": {"dtype": "str"},
+            "permission": {"dtype": "int"},
+            "auth_method": {"dtype": "str"},
+        },
+        "primary": "user_id",
     },
     "symptoms": {
-        "symptoms_id": {"dtype": "int", "auto_increment": True},
-        "name": {"dtype": "str"},
-        "academic": {"dtype": "str"},
-        "visit": {"dtype": "int"},
+        "columns": {
+            "symptoms_id": {"dtype": "int", "auto_increment": True},
+            "name": {"dtype": "str"},
+            "academic": {"dtype": "str"},
+            "visit": {"dtype": "int"},
+        },
+        "primary": "symptoms_id",
     },
     "bulletins": {
-        "bulletin_id": {"dtype": "int", "auto_increment": True},
-        "class": {"dtype": "str"},
-        "user_id": {"dtype": "int"},
-        "title": {"dtype": "str"},
-        "content": {"dtype": "str"},
-        "update_at": {"dtype": "str"},
-        "create_at": {"dtype": "str"},
+        "columns": {
+            "bulletin_id": {"dtype": "int", "auto_increment": True},
+            "class": {"dtype": "str"},
+            "user_id": {"dtype": "int"},
+            "title": {"dtype": "str"},
+            "content": {"dtype": "str"},
+            "update_at": {"dtype": "str"},
+            "create_at": {"dtype": "str"},
+        },
+        "primary": "bulletin_id",
     },
     "clinics": {
-        "clinic_id": {"dtype": "int", "auto_increment": True},
-        "title": {"dtype": "str"},
-        "address": {"dtype": "str"},
-        "tel": {"dtype": "str"},
-        "tags": {"dtype": "array"},
-        "owner_id": {"dtype": "int"},
+        "columns": {
+            "clinic_id": {"dtype": "int", "auto_increment": True},
+            "title": {"dtype": "str"},
+            "address": {"dtype": "str"},
+            "tel": {"dtype": "str"},
+            "tags": {"dtype": "array"},
+            "owner_id": {"dtype": "int"},
+        },
+        "primary": "clinic_id",
     },
 }
 
@@ -60,6 +72,55 @@ def check_password_hash(password: str, hash_: bytes):
     return bcrypt.checkpw(password.encode(), hash_bytes)
 
 
+class ExtendedColumn(pypika.Column):
+    """
+    A column extended with custom attributes.
+    Pypika has support for attributes ('nullable', 'default').
+    """
+
+    EXTRA_ATTRIB = ("auto_increment",)
+
+    def __init__(self, *args, extra_attr: Mapping[str, Collection[str]], **kwargs):
+        super().__init__(*args, **kwargs)
+        self.extra_attr = extra_attr
+
+    # pylint: disable=consider-using-f-string
+    def get_sql(self, **kwargs) -> str:
+        auto_increment = self.extra_attr.get("auto_increment", False)
+        extra_sql = "{auto_increment}".format(
+            # SQLite only supports auto increment on primary key
+            auto_increment=(" PRIMARY KEY AUTOINCREMENT" if auto_increment else ""),
+        )
+
+        column_sql = "{super_stmt}{extra_stmt}".format(
+            super_stmt=super().get_sql(**kwargs), extra_stmt=extra_sql
+        )
+
+        return column_sql
+
+    @classmethod
+    def compile_column(
+        cls, name: str, prop: Mapping[str, Collection[str]]
+    ) -> pypika.Column:
+        """
+        Create column from property map.
+        """
+        prop_super = dict(prop)
+
+        # VARCHAR/TEXT: SQLite does not impose any length restrictions
+        dtype = {
+            "str": "TEXT",
+            "int": "INTEGER",
+        }[str(prop_super.pop("dtype"))]
+
+        extend_attrib = {}
+        for pname in cls.EXTRA_ATTRIB:
+            if pname in prop:
+                extend_attrib[pname] = prop_super.pop(pname)
+
+        return cls(name, dtype, extra_attr=extend_attrib, **prop_super)
+
+
 class DatabaseNative:
     """
     Connection to native (SQLite) database.
@@ -74,7 +135,7 @@ class DatabaseNative:
         """
         Execute database script (in SQL), and return all values fetched.
         """
-        logger.debug(script)
+        logger.error(script)
 
         cursor = self.conn.cursor()
         res = cursor.execute(script).fetchall()  # TODO: optimize fetch
@@ -101,11 +162,30 @@ class BaseTableDatabase(ABC):
     """
 
     def __init__(
-        self, table_name: str, db: DatabaseNative, fields: tuple[str, ...]
+        self, table_name: str, db: DatabaseNative, fields: Mapping[str, Collection[str]]
     ) -> None:
         self.db = db
         self.table_name = table_name
         self.fields = fields
+
+        self.create_table()
+
+    def create_table(self):
+        """
+        Create table with fields `self.fields`, if not previously exist.
+        """
+
+        columns = [
+            ExtendedColumn.compile_column(name, prop)
+            for name, prop in self.fields["columns"].items()
+        ]
+
+        query = (
+            pypika.Query.create_table(self.table_name)
+            .columns(*columns)
+            .primary_key(self.fields["primary"])
+        )
+        self.db.execute(str(query))
 
     def criterion_selector(self) -> tuple[pypika.Table, pypika.terms.Criterion]:
         """
@@ -217,30 +297,7 @@ class UserDatabase(BaseTableDatabase):
     """
 
     def __init__(self, db: DatabaseNative) -> None:
-        super().__init__(
-            "users",
-            db,
-            (
-                "user_id",
-                "username",
-                "password",
-                "permission",
-                "auth_method",
-            ),
-        )
-
-        # VARCHAR/TEXT: SQLite does not impose any length restrictions
-        self.db.execute(
-            """
-CREATE TABLE IF NOT EXISTS `users` (
-  `user_id` INTEGER PRIMARY KEY AUTOINCREMENT,
-  `username` TEXT,
-  `password` TEXT,
-  `permission` INTEGER,
-  `auth_method` TEXT
-)
-"""
-        )
+        super().__init__("users", db, DB_PROPERTY["users"])
 
     def create_bulk(self, entries):
         return self.create_bulk_from(
@@ -254,18 +311,7 @@ class SymptomDatabase(BaseTableDatabase):
     """
 
     def __init__(self, db: DatabaseNative) -> None:
-        super().__init__("symptoms", db, ("symptoms_id", "name", "academic", "visit"))
-
-        self.db.execute(
-            """
-CREATE TABLE IF NOT EXISTS `symptoms` (
-  `symptoms_id` INTEGER PRIMARY KEY AUTOINCREMENT,
-  `name` TEXT,
-  `academic` TEXT,
-  `visit` INTEGER
-)
-"""
-        )
+        super().__init__("symptoms", db, DB_PROPERTY["symptoms"])
 
     def create_bulk(self, entries):
         return self.create_bulk_from(
@@ -279,33 +325,7 @@ class BulletinDatabase(BaseTableDatabase):
     """
 
     def __init__(self, db: DatabaseNative) -> None:
-        super().__init__(
-            "bulletins",
-            db,
-            (
-                "bulletin_id",
-                "class",
-                "user_id",
-                "title",
-                "content",
-                "update_at",
-                "create_at",
-            ),
-        )
-
-        self.db.execute(
-            """
-CREATE TABLE IF NOT EXISTS `bulletins` (
-  `bulletin_id` INTEGER PRIMARY KEY AUTOINCREMENT,
-  `class` TEXT,
-  `user_id` INTEGER,
-  `title` TEXT,
-  `content` TEXT,
-  `update_at` TEXT,
-  `create_at` TEXT
-)
-"""
-        )
+        super().__init__("bulletins", db, DB_PROPERTY["bulletins"])
 
     def create_bulk(self, entries):
         return self.create_bulk_from(
@@ -321,29 +341,7 @@ class ClinicDatabase(BaseTableDatabase):
     """
 
     def __init__(self, db: DatabaseNative) -> None:
-        super().__init__(
-            "clinics",
-            db,
-            (
-                "clinic_id",
-                "name",
-                "address",
-                "contact",
-                "owner_id",
-            ),
-        )
-
-        self.db.execute(
-            """
-CREATE TABLE IF NOT EXISTS `clinics` (
-  `clinic_id` INTEGER PRIMARY KEY AUTOINCREMENT,
-  `name` TEXT,
-  `address` TEXT,
-  `contact` TEXT,
-  `owner_id` INTEGER
-)
-"""
-        )
+        super().__init__("clinics", db, DB_PROPERTY["clinics"])
 
     def create_bulk(self, entries):
         return self.create_bulk_from(

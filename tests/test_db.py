@@ -23,17 +23,17 @@ class SampleUserDatabase(BaseTableDatabase):
     """
 
     def __init__(self, db: DatabaseNative) -> None:
-        super().__init__("users", db, ("user_id", "permissions", "auth_method"))
-
-        # TODO: consider creating with PyPika
-        self.db.execute(
-            """
-CREATE TABLE IF NOT EXISTS `users` (
-  `user_id` INTEGER PRIMARY KEY AUTOINCREMENT,
-  `permissions` INTEGER,
-  `auth_method` VARCHAR(16)
-)
-"""
+        super().__init__(
+            "users",
+            db,
+            {
+                "columns": {
+                    "user_id": {"dtype": "int", "auto_increment": True},
+                    "permission": {"dtype": "int"},
+                    "auth_method": {"dtype": "str"},
+                },
+                "primary": "user_id",
+            },
         )
 
     def create_bulk(self, entries):
