@@ -79,7 +79,7 @@ class TypeConvertField(pypika.Field):
     def wrap_constant(self, val, *args):
         """
         (From Pypika) Used for wrapping raw inputs such as numbers in Criterions and Operator.
-        Value is wrapped
+        Value is converted if the field is of a custom type.
         """
 
         if not (isinstance(val, pypika.terms.Node) or val is None):
@@ -217,7 +217,10 @@ class BaseTableDatabase(ABC):
     """
 
     def __init__(
-        self, table_name: str, db: DatabaseNative, fields: Mapping[str, Collection[str]]
+        self,
+        table_name: str,
+        db: DatabaseNative,
+        fields: Mapping[str, Mapping[str, object]],
     ) -> None:
         self.db = db
         self.table_name = table_name
@@ -313,6 +316,16 @@ class BaseTableDatabase(ABC):
         res = self.db.execute(query_str, values)
         return res
 
+    def create_bulk_map_from(
+        self,
+        entries: Sequence[dict[str, object]],
+        value_columns: tuple[str],
+        return_columns: tuple[str],
+    ):
+        res = self.create_bulk_from(entries, value_columns, return_columns)
+        res_map = [dict(zip(return_columns, ent)) for ent in res]
+        return [{**x, **y} for x, y in zip(entries, res_map)]
+
     def query(
         self,
         criterion: pypika.terms.Criterion,
@@ -379,7 +392,7 @@ class UserDatabase(BaseTableDatabase):
         super().__init__("users", db, DB_PROPERTY["users"])
 
     def create_bulk(self, entries):
-        return self.create_bulk_from(
+        return self.create_bulk_map_from(
             entries, ("username", "password", "permission", "auth_method"), ("user_id",)
         )
 
@@ -393,7 +406,7 @@ class SymptomDatabase(BaseTableDatabase):
         super().__init__("symptoms", db, DB_PROPERTY["symptoms"])
 
     def create_bulk(self, entries):
-        return self.create_bulk_from(
+        return self.create_bulk_map_from(
             entries, ("name", "academic", "visit"), ("symptoms_id",)
         )
 
@@ -407,7 +420,7 @@ class BulletinDatabase(BaseTableDatabase):
         super().__init__("bulletins", db, DB_PROPERTY["bulletins"])
 
     def create_bulk(self, entries):
-        return self.create_bulk_from(
+        return self.create_bulk_map_from(
             entries,
             ("class", "user_id", "title", "content", "update_at", "create_at"),
             ("bulletin_id",),
@@ -423,9 +436,9 @@ class ClinicDatabase(BaseTableDatabase):
         super().__init__("clinics", db, DB_PROPERTY["clinics"])
 
     def create_bulk(self, entries):
-        return self.create_bulk_from(
+        return self.create_bulk_map_from(
             entries,
-            ("name", "address", "contact", "owner_id"),
+            ("title", "address", "tel", "tags", "owner_id"),
             ("clinic_id",),
         )
 
@@ -476,7 +489,9 @@ class MasterDatabase:
         table = self.tables[table_name]
         res = self.query_value(table_name, entry, select_fields)
 
-        keys = table.fields if select_fields == ("*",) else select_fields
+        keys = (
+            table.fields["columns"].keys() if select_fields == ("*",) else select_fields
+        )
         return [dict(zip(keys, ent)) for ent in res]
 
     def update(

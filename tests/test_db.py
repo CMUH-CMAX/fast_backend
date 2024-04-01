@@ -574,7 +574,7 @@ class FakeDatabaseInitTestCase(unittest.TestCase):
         return random.sample(array, count)
 
     def testClinics(self):
-        res = self.db.read("clinics", {"name": "萬安中醫診所"})
+        res = self.db.read("clinics", {"title": "萬安中醫診所"})
         assert any(ent["address"] == "台中市西屯區重慶路１３１號１樓" for ent in res)
 
         # PyPika does not support SQLite substr() yet
