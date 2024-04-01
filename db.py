@@ -141,14 +141,15 @@ class DatabaseNative:
         if password is not None:
             raise NotImplementedError
 
-    def execute(self, script):
+    def execute(self, script, params=()):
         """
         Execute database script (in SQL), and return all values fetched.
+        Parameters should be specified in `params`, wrapped in a list containing each item.
         """
         logger.debug(script)
 
         cursor = self.conn.cursor()
-        res = cursor.execute(script).fetchall()  # TODO: optimize fetch
+        res = cursor.execute(script, params).fetchall()  # TODO: optimize fetch
 
         self.conn.commit()
         return res
@@ -209,11 +210,11 @@ class BaseTableDatabase(ABC):
         """
         if isinstance(entry, Sequence):
             return self.create_bulk(entry)
-        else:
-            res = self.create_bulk((entry,))
 
-            # single entry, return single result
-            return res[0]
+        res = self.create_bulk((entry,))
+
+        # single entry, return single result
+        return res[0]
 
     def create_bulk_from(
         self,
@@ -226,20 +227,27 @@ class BaseTableDatabase(ABC):
         """
         query = pypika.Query.into(self.table_name).columns(*value_columns)
 
+        # We need return values, so no executemany()
+        # query = query.insert([pypika.Parameter("?") for _ in value_columns])
+        values: list[object] = []
         for entry in entries:
-            query = query.insert(*map(entry.__getitem__, value_columns))
+            query = query.insert([pypika.Parameter("?") for _ in value_columns])
+            values.extend(map(entry.__getitem__, value_columns))
+
+        # for entry in entries:
+        #     query = query.insert(*map(entry.__getitem__, value_columns))
 
         # PyPika does not support SQLite 'RETURNING'
         # query = query.returning(*return_columns) # TODO
         query_str = (
             str(query)
-            + "RETURNING("
+            + " RETURNING("
             + ", ".join(f"`{name}`" for name in return_columns)
             + ")"
         )
 
         # return: auto & default fields
-        res = self.db.execute(query_str)
+        res = self.db.execute(query_str, values)
         return res
 
     def query(
