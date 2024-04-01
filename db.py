@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import base64
 import binascii
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 import json
 import logging
 import sqlite3
@@ -9,6 +9,7 @@ from types import MappingProxyType
 
 import bcrypt
 import pypika  # type: ignore
+import pypika.terms
 
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,52 @@ def check_password_hash(password: str, hash_: bytes):
     return bcrypt.checkpw(password.encode(), hash_bytes)
 
 
+class TypeConvertField(pypika.Field):
+    def __init__(self, *args, converter: Callable[..., str], **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.converter = converter
+
+    # pylint: disable = arguments-differ
+    def wrap_constant(self, val, *args):
+        """
+        (From Pypika) Used for wrapping raw inputs such as numbers in Criterions and Operator.
+        Value is wrapped
+        """
+
+        if not (isinstance(val, pypika.terms.Node) or val is None):
+            # Should be custom-typed constant
+            try:
+                return self.converter(val)
+            except ValueError:
+                # pylint: disable = logging-fstring-interpolation
+                logger.error(
+                    f"Failed to convert custom type: {self.table=}, {self.name=}, {val=}"
+                )
+
+        return pypika.terms.Term.wrap_constant(val, *args)
+
+
+class TypeConvertTable(pypika.Table):
+    DTYPE_MAP = {
+        "str": "TEXT",
+        "int": "INTEGER",
+        "array": "CUSTOM_ARRAY",
+    }
+
+    CONVERTER = {"CUSTOM_ARRAY": json.dumps}
+
+    def __init__(self, *args, prop: Mapping[str, Mapping[str, str]]):
+        super().__init__(args)
+        self.prop = prop
+
+    def field(self, name: str) -> TypeConvertField:
+        dtype = self.prop[name]["dtype"]
+        if (conv := self.CONVERTER.get(dtype, None)) is not None:
+            return TypeConvertField(name, table=self, converter=conv)
+
+        return super().field(name)
+
+
 class ExtendedColumn(pypika.Column):
     """
     A column extended with custom attributes.
@@ -116,11 +163,7 @@ class ExtendedColumn(pypika.Column):
         prop_super = dict(prop)
 
         # VARCHAR/TEXT: SQLite does not impose any length restrictions
-        dtype = {
-            "str": "TEXT",
-            "int": "INTEGER",
-            "array": "CUSTOM_ARRAY",
-        }[str(prop_super.pop("dtype"))]
+        dtype = TypeConvertTable.DTYPE_MAP[str(prop_super.pop("dtype"))]
 
         extend_attrib = {}
         for pname in cls.EXTRA_ATTRIB:
@@ -146,7 +189,8 @@ class DatabaseNative:
         Execute database script (in SQL), and return all values fetched.
         Parameters should be specified in `params`, wrapped in a list containing each item.
         """
-        logger.debug(script)
+        logger.error("Executing '%s', with params %s", script, params)
+        # self.conn.set_trace_callback(logger.error)
 
         cursor = self.conn.cursor()
         res = cursor.execute(script, params).fetchall()  # TODO: optimize fetch
@@ -200,7 +244,10 @@ class BaseTableDatabase(ABC):
         Return: field selector (table), empty criterion (*)
         See: tests/test_db.py
         """
-        return pypika.Table(self.table_name), pypika.terms.EmptyCriterion()
+        return (
+            TypeConvertTable(self.table_name, prop=self.fields["columns"]),  # type: ignore
+            pypika.terms.EmptyCriterion(),
+        )
 
     def create(self, entry: dict[str, object] | Sequence[dict[str, object]]):
         """
@@ -239,11 +286,15 @@ class BaseTableDatabase(ABC):
 
         # PyPika does not support SQLite 'RETURNING'
         # query = query.returning(*return_columns) # TODO
-        query_str = (
-            str(query)
-            + " RETURNING("
-            + ", ".join(f"`{name}`" for name in return_columns)
-            + ")"
+        returning_str = (
+            " RETURNING(" + ", ".join(f"`{name}`" for name in return_columns) + ")"
+            if len(return_columns) > 0
+            else ""
+        )
+
+        # pylint: disable = consider-using-f-string
+        query_str = "{query}{returning}".format(
+            query=str(query), returning=returning_str
         )
 
         # return: auto & default fields
