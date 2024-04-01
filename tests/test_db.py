@@ -380,6 +380,8 @@ class DtypeTestCase(unittest.TestCase):
                 )
 
         table = TestArrayTable(self.ndb)
+        tb, _ = table.criterion_selector()
+
         datas = [
             {"key_int": 1, "dat_array": []},
             {"key_int": 2, "dat_array": [1, 2, 3]},
@@ -403,6 +405,75 @@ class DtypeTestCase(unittest.TestCase):
             (3, ["a", "bb", "ccc"]),
             (
                 888,
+                [
+                    "'single'",
+                    '"double"',
+                    "--comment",
+                    ";end_line",
+                    "UTF8編碼",
+                ],
+            ),
+        ]
+
+        assert table.query_value({"dat_array": [1, 2, 3]}) == [
+            (2, [1, 2, 3]),
+        ]
+
+        assert table.query(tb.dat_array != [1, 2, 3]) == [
+            (1, []),
+            (3, ["a", "bb", "ccc"]),
+            (
+                888,
+                [
+                    "'single'",
+                    '"double"',
+                    "--comment",
+                    ";end_line",
+                    "UTF8編碼",
+                ],
+            ),
+        ]
+
+        table.update(tb.key_int < 3, {"dat_array": [3, 2, 1]})
+        assert table.query_value({}) == [
+            (1, [3, 2, 1]),
+            (2, [3, 2, 1]),
+            (3, ["a", "bb", "ccc"]),
+            (
+                888,
+                [
+                    "'single'",
+                    '"double"',
+                    "--comment",
+                    ";end_line",
+                    "UTF8編碼",
+                ],
+            ),
+        ]
+
+        table.update(tb.key_int == 888, {"key_int": 88888})
+        assert table.query_value({}) == [
+            (1, [3, 2, 1]),
+            (2, [3, 2, 1]),
+            (3, ["a", "bb", "ccc"]),
+            (
+                88888,
+                [
+                    "'single'",
+                    '"double"',
+                    "--comment",
+                    ";end_line",
+                    "UTF8編碼",
+                ],
+            ),
+        ]
+
+        table.delete(tb.dat_array == ["a", "bb", "ccc"])
+        assert table.query_value({}) == [
+            (1, [3, 2, 1]),
+            (2, [3, 2, 1]),
+            (
+                88888,
                 [
                     "'single'",
                     '"double"',

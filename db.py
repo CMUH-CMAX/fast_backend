@@ -85,7 +85,7 @@ class TypeConvertField(pypika.Field):
         if not (isinstance(val, pypika.terms.Node) or val is None):
             # Should be custom-typed constant
             try:
-                return self.converter(val)
+                return pypika.terms.ValueWrapper(self.converter(val))
             except ValueError:
                 # pylint: disable = logging-fstring-interpolation
                 logger.error(
@@ -102,10 +102,10 @@ class TypeConvertTable(pypika.Table):
         "array": "CUSTOM_ARRAY",
     }
 
-    CONVERTER = {"CUSTOM_ARRAY": json.dumps}
+    CONVERTER = {"array": json.dumps}
 
     def __init__(self, *args, prop: Mapping[str, Mapping[str, str]]):
-        super().__init__(args)
+        super().__init__(*args)
         self.prop = prop
 
     def field(self, name: str) -> TypeConvertField:
@@ -189,7 +189,7 @@ class DatabaseNative:
         Execute database script (in SQL), and return all values fetched.
         Parameters should be specified in `params`, wrapped in a list containing each item.
         """
-        logger.error("Executing '%s', with params %s", script, params)
+        logger.debug("Executing '%s', with params %s", script, params)
         # self.conn.set_trace_callback(logger.error)
 
         cursor = self.conn.cursor()
@@ -263,6 +263,12 @@ class BaseTableDatabase(ABC):
         # single entry, return single result
         return res[0]
 
+    def convert_entry(self, dtype, value):
+        if (conv := TypeConvertTable.CONVERTER.get(dtype, None)) is not None:
+            return conv(value)
+
+        return value
+
     def create_bulk_from(
         self,
         entries: Sequence[dict[str, object]],
@@ -279,7 +285,13 @@ class BaseTableDatabase(ABC):
         values: list[object] = []
         for entry in entries:
             query = query.insert([pypika.Parameter("?") for _ in value_columns])
-            values.extend(map(entry.__getitem__, value_columns))
+            values.extend(
+                self.convert_entry(
+                    self.fields["columns"][name]["dtype"],  # type: ignore
+                    entry[name],
+                )
+                for name in value_columns
+            )
 
         # for entry in entries:
         #     query = query.insert(*map(entry.__getitem__, value_columns))
@@ -336,7 +348,9 @@ class BaseTableDatabase(ABC):
         """
         query = pypika.Query.update(self.table_name).where(criterion)
         for fd, fval in entry.items():
-            query = query.set(fd, fval)
+            dtype = self.fields["columns"][fd]["dtype"]  # type: ignore
+            cval = self.convert_entry(dtype, fval)
+            query = query.set(fd, cval)
 
         self.db.execute(str(query))
 
