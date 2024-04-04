@@ -24,15 +24,18 @@ app.add_middleware(
 
 
 # Fake database
-from db import DB_PROPERTY, Database
+from db import MasterDatabase
 
-db = Database( DB_PROPERTY )
-guest = db.create('users', {
-    'username': 'guest', 
-    'password': 'no_password', 
-    'permission': 0, 
-    'auth_method': 'no_password',
-})
+db = MasterDatabase(".local/test.db")
+guest = db.create(
+    "users",
+    {
+        "username": "guest",
+        "password": "no_password",
+        "permission": 0,
+        "auth_method": "no_password",
+    },
+)
 init_all(db)
 CACHE = {'guest': guest}
 
